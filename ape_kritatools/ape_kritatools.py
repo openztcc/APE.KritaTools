@@ -72,16 +72,6 @@ class APEKritaTools(Extension):
     def load_image_into_krita(self):
         """Load an RGBA pixel stream from pyape.dll and create a new Krita layer."""
         krita_instance = Krita.instance()
-        doc = krita_instance.activeDocument()
-
-        # If no document is open, create one
-        if not doc:
-            doc = krita_instance.createDocument(512, 512, "APE Image", "RGBA", "U8", "", 300.0)
-            krita_instance.activeWindow().addView(doc)
-
-        node = doc.createNode("APE Layer", "paintlayer")
-        doc.rootNode().addChildNode(node, None)
-        doc.setActiveNode(node)
 
         # Load image from DLL
         self.ape_instance = lib.create_ape_instance()
@@ -93,59 +83,71 @@ class APEKritaTools(Extension):
         ape_path = QFileDialog.getOpenFileName(None, "Open APE Image", "", "APE Image (*)")
         pal_path = QFileDialog.getOpenFileName(None, "Open APE Palette", "", "APE Palette (*.pal)")
 
-        if not lib.load_image(self.ape_instance, ape_path[0].encode(), 0, pal_path[0].encode()):
+        if not lib.load_image(self.ape_instance, ape_path[0].encode(), 1, pal_path[0].encode()):
             self.show_message("Error", "Error: Failed to load image.")
             return
+        
+        # Get frame count
+        frame_count = lib.get_frame_count(self.ape_instance)
 
-        # Get buffers
+        # Get frame data
         frame_buffer = lib.get_frame_buffer(self.ape_instance)
-        frame = frame_buffer[0].contents
-        width = frame.width
-        height = frame.height
-        channels = frame.channels
-        pixel_stream = frame.pixels
+        frames = []
 
-        if not pixel_stream:
-            self.show_message("Error", "Error: Failed to get pixel stream.")
-            return
+        for i in range(0, frame_count - 1):
+            frame = frame_buffer[i].contents
+            width = frame.width
+            height = frame.height
+            channels = frame.channels
+            pixel_stream = frame.pixels
 
-        self.show_message("Frame Size", "Frame size: {}x{}".format(width, height) + 
-                                                "\nChannels: {}".format(channels))
+            if not pixel_stream:
+                self.show_message("Error", "Error: Failed to get pixel stream.")
+                return
 
-        if width == 0 or height == 0:
-            self.show_message("Error", "Error: Image buffer is empty.")
-            return
+            if width <= 0 or height <= 0:
+                self.show_message("Error", "Error: Image buffer is empty.")
+                return
+
+            # Convert C++ pixel buffer to python bytes
+            num_pixels = width * height * channels
+            pixel_data_ptr = ctypes.cast(pixel_stream, ctypes.POINTER(ctypes.c_uint8 * num_pixels))
+
+            try:
+                pixel_array = bytearray(pixel_data_ptr.contents)
+            except ValueError as e:
+                self.show_message("Error", f"Error: {str(e)}")
+                return
+            
+            frames.append((width, height, channels, pixel_array))
+
+        # Find the largest size
+        max_width = max(frame[0] for frame in frames)
+        max_height = max(frame[1] for frame in frames)
         
-        num_pixels = width * height * channels
-        pixel_data = ctypes.cast(pixel_stream, ctypes.POINTER(ctypes.c_uint8 * num_pixels)).contents
+        doc = krita_instance.activeDocument()
 
-        # Convert pixel data to a bytearray
-        try:
-            pixel_array = bytearray(pixel_data)
-        except ValueError as e:
-            self.show_message("Error", f"Error: {str(e)}")
-            return
+        # If no document is open, create one
+        if not doc:
+            doc = krita_instance.createDocument(max_width, max_height, "APE Image", "RGBA", "U8", "", 300.0)
+            krita_instance.activeWindow().addView(doc)
 
-        # Convert to QImage (RGBA format)
-        qimage = QImage(pixel_array, width, height, QImage.Format_RGBA8888)
+        # Add layers to document
+        for i, (width, height, channels, pixel_array) in enumerate(frames):
+            node = doc.createNode(f"Frame {i}", "paintlayer")
+            doc.rootNode().addChildNode(node, None)
 
-        if qimage.isNull():
-            self.show_message("Error", "Error: Failed to convert pixel data to QImage.")
-            return
-        
-        # convert QImage to bytes
-        qimage_bytes = qimage.bits().asarray(width * height * channels)
+            # Send the raw pixel data directly to Krita
+            node.setPixelData(pixel_array, 0, 0, width, height)
+            # Refresh to apply changes
+            doc.refreshProjection()
+            # Set the new layer as the active node
 
-        if not qimage_bytes:
-            self.show_message("Error", "Error: Failed to convert QImage to bytes.")
-            return
-        
-        # convert to bytearray
-        qimage_bytearray = bytearray(qimage_bytes)
+            doc.setActiveNode(node)
 
-        # Set pixel data into Krita
-        node.setPixelData(qimage_bytearray, 0, 0, width, height)
 
+        # # Send the raw pixel data directly to Krita
+        # node.setPixelData(pixel_array, 0, 0, width, height)
         # Refresh to apply changes
         doc.refreshProjection()
 
