@@ -1,3 +1,3 @@
-from .extension_template import ExtensionTemplate
+from .ape_kritatools import APEKritaTools
 
 Krita.instance().addExtension(APEKritaTools(Krita.instance()))
