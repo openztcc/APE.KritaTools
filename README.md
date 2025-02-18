@@ -22,10 +22,10 @@ Open Krita and go to `Settings > Configure Krita > Python Plugin Manager` - Enab
 
 Go to `Tools > Load APE image into Krita`. It will ask you to find the extensionless graphic first (i.e. SE, NE, N,  etc), and then again will ask you to open the pal file associated with it. There won't be a prompt for the second one, it will just open another dialog window to search for the file.
 
-Current issues as of v0.1.0:
+Current issues as of v0.4.0:
 
-- Weird artifacts on every frame
 - Not very intuitive to use yet
 - No save function yet
+- Possible issues with memory management. Might need to restart app if new graphic need loaded.
 
 Much thanks to Jeff Bostoen's detailed specification of the ZT1 graphics format here: https://github.com/jbostoen/ZTStudio/wiki/ZT1-Graphics-Explained
