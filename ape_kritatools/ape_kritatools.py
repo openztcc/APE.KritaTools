@@ -168,7 +168,7 @@ class APEKritaTools(Extension):
         open_button.setMaximumSize(button_width, widget_height)
         open_sub_row.addWidget(open_button)
         # ----- Connect button to function
-        open_button.clicked.connect(self.load_image_into_krita)
+        open_button.clicked.connect(lambda: self.open_file("Open APE Image", "APE Image (*)", open_text))
         # ------------------------------------- #
 
         # Open Palette Form
@@ -199,7 +199,7 @@ class APEKritaTools(Extension):
         # ----- Connect checkbox to function
         # ------------------------------------- #
         # ----- Connect button to function
-        open_pal_button.clicked.connect(self.load_image_into_krita)
+        open_pal_button.clicked.connect(lambda: self.open_file("Open APE Palette", "APE Palette (*.pal)", open_pal_text))
         # ------------------------------------- #
 
         # Settings Panel
@@ -259,7 +259,13 @@ class APEKritaTools(Extension):
                 
         # Show dialog
         ape_win.exec_()
-
+    
+    def open_file(self, title, type_filter, text_field):
+        path = QFileDialog.getOpenFileName(None, title, "", type_filter)
+        if path[0]:
+            text_field.setText(path[0])
+        else:
+            text_field.setText("")
 
     def createActions(self, window):
         """ Register Krita menu action """
