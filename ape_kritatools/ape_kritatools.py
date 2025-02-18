@@ -129,7 +129,144 @@ class APEKritaTools(Extension):
         msg.setIcon(QMessageBox.Information)
         msg.exec_()
 
+    def open_dialog(self):
+        """Open dialog."""
+        # static variables
+        widget_height = 25
+        text_field_width = 460
+        button_width = 100
+        form_width = text_field_width + button_width + 10
+        form_height = 300
+
+        # Create pop-up dialog
+        ape_win = QDialog()
+        ape_win.setWindowTitle("APE Krita Tools v" + VERSION)
+        ape_win.setMinimumSize(form_width, form_height)
+        ape_win.setMaximumSize(form_width, form_height)
+
+        # Create layout
+        root = QVBoxLayout()
+        ape_win.setLayout(root)
+
+        # Open Button Form
+        open_form = QVBoxLayout()
+        root.addLayout(open_form)
+        # ----- Open Label
+        open_msg = QLabel("Open APE Graphic")
+        open_form.addWidget(open_msg)
+        # ----- Textfield + Button
+        open_sub_row = QHBoxLayout()
+        open_form.addLayout(open_sub_row)
+        # ------------- Textfield
+        open_text = QLineEdit()
+        open_text.setMinimumSize(text_field_width, widget_height)
+        open_text.setMaximumSize(text_field_width, widget_height)
+        open_sub_row.addWidget(open_text)
+        # ------------- Button
+        open_button = QPushButton("Open")
+        open_button.setMinimumSize(button_width, widget_height)
+        open_button.setMaximumSize(button_width, widget_height)
+        open_sub_row.addWidget(open_button)
+        # ----- Connect button to function
+        open_button.clicked.connect(self.load_image_into_krita)
+        # ------------------------------------- #
+
+        # Open Palette Form
+        open_pal_form = QVBoxLayout()
+        root.addLayout(open_pal_form)
+        # ----- Open Label
+        open_pal_msg = QLabel("Open APE Palette")
+        open_pal_form.addWidget(open_pal_msg)
+        # ----- Textfield + Button
+        open_pal_sub_row = QHBoxLayout()
+        open_pal_form.addLayout(open_pal_sub_row)
+        # ------------- Textfield
+        open_pal_text = QLineEdit()
+        open_pal_text.setMinimumSize(text_field_width, widget_height)
+        open_pal_text.setMaximumSize(text_field_width, widget_height)
+        open_pal_text.setDisabled(True)
+        open_pal_sub_row.addWidget(open_pal_text)
+        # ------------- Button
+        open_pal_button = QPushButton("Open")
+        open_pal_button.setMinimumSize(button_width, widget_height)
+        open_pal_button.setMaximumSize(button_width, widget_height) 
+        open_pal_button.setDisabled(True)
+        open_pal_sub_row.addWidget(open_pal_button)
+        # ------------- Enable checkbox
+        open_pal_checkbox = QCheckBox("Use Embedded Palette")
+        open_pal_checkbox.setChecked(True)
+        open_pal_form.addWidget(open_pal_checkbox)
+        # ----- Connect checkbox to function
+        # ------------------------------------- #
+        # ----- Connect button to function
+        open_pal_button.clicked.connect(self.load_image_into_krita)
+        # ------------------------------------- #
+
+        # Settings Panel
+        settings_panel = QWidget()
+        settings_panel.setObjectName("settings_panel")
+        settings_panel.setStyleSheet("""
+            #settings_panel { 
+                border: 1px solid rgb(51, 51, 51); 
+                padding: 5px;
+                border-radius: 5px;
+                background-color: rgb(70, 70, 70);
+            }
+        """)
+        # ----- Create settings layout
+        settings_form = QVBoxLayout(settings_panel)
+        root.addWidget(settings_panel)
+
+        # ----- Settings Label
+        settings_msg = QLabel("Settings")
+        settings_form.addWidget(settings_msg)
+        # ----- Load only background frame checkbox
+        load_bg_checkbox = QCheckBox("Load only background frame")
+        load_bg_checkbox.setChecked(False)
+        settings_form.addWidget(load_bg_checkbox)
+        # ----- Import with alpha checkbox
+        import_alpha_checkbox = QCheckBox("Import with alpha")
+        import_alpha_checkbox.setChecked(True)
+        # ----- Add border to settings panel
+        settings_form.addWidget(import_alpha_checkbox)
+        # ----- Spacer
+        settings_form.addStretch()
+
+        # Import/Cancel Form
+        import_form = QHBoxLayout()
+        root.addLayout(import_form)
+        # ----- Spacer
+        import_form.addStretch()
+        # ----- Import Button
+        import_button = QPushButton("Import")
+        import_button.setMinimumSize(button_width, widget_height)
+        import_button.setMaximumSize(button_width, widget_height)
+        import_form.addWidget(import_button)
+        # ----- Connect button to function
+        import_button.clicked.connect(self.load_image_into_krita)
+        # ----- Cancel Button
+        cancel_button = QPushButton("Cancel")
+        cancel_button.setMinimumSize(button_width, widget_height)
+        cancel_button.setMaximumSize(button_width, widget_height)
+        import_form.addWidget(cancel_button)
+        cancel_button.clicked.connect(ape_win.close)
+        # ------------------------------------- #
+        # ------------------------------------- #
+
+        # Set margins and spacing
+        root.setContentsMargins(10, 10, 10, 10)
+        root.setSpacing(10)
+                
+        # Show dialog
+        ape_win.exec_()
+
+
     def createActions(self, window):
         """ Register Krita menu action """
         action = window.createAction("ape_load_krita", "Load APE Image into Krita", "tools/scripts")
-        action.triggered.connect(self.load_image_into_krita)
+        # action.triggered.connect(self.load_image_into_krita)
+        # Open dialog
+        action.triggered.connect(self.open_dialog)
+
+
+    
