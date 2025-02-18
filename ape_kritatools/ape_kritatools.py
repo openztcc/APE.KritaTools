@@ -9,7 +9,7 @@ sys.path.append(os.path.join(dir_path, "inc"))
 
 from ape_def import lib
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 
 class APEKritaTools(Extension):
 
@@ -24,7 +24,7 @@ class APEKritaTools(Extension):
 
     def load_frames(self, frame_buffer, frame_count, frames):
         """Load frames from frame buffer."""
-        for i in range(0, frame_count - 1):
+        for i in range(0, frame_count):
             frame = frame_buffer[i].contents
             width = frame.width
             height = frame.height
@@ -39,16 +39,16 @@ class APEKritaTools(Extension):
                 self.show_message("Error", "Error: Image buffer is empty.")
                 return
 
-            # Convert C++ pixel buffer to python bytes
             num_pixels = width * height * channels
-            pixel_data_ptr = ctypes.cast(pixel_stream, ctypes.POINTER(ctypes.c_uint8 * num_pixels))
 
-            try:
-                pixel_array = bytearray(pixel_data_ptr.contents)
-            except ValueError as e:
-                self.show_message("Error", f"Error: {str(e)}")
-                return
-            
+            # Convert C++ pixel stream to Python bytearray
+            pixel_data_ptr = ctypes.cast(pixel_stream, ctypes.POINTER(ctypes.c_uint8 * num_pixels))
+            pixel_array = bytearray(pixel_data_ptr.contents)
+
+            if channels == 4:
+                for p in range(0, num_pixels, 4):
+                    pixel_array[p], pixel_array[p + 2] = pixel_array[p + 2], pixel_array[p]
+
             frames.append((width, height, channels, pixel_array))
 
     def frames_to_layers(self, frames, doc):
@@ -108,12 +108,13 @@ class APEKritaTools(Extension):
         max_width = max(frame[0] for frame in frames)
         max_height = max(frame[1] for frame in frames)
         
-        doc = krita_instance.activeDocument()
+        doc = krita_instance.createDocument(max_width, max_height, "Untitled", "RGBA", "U8", "", 300.0)
+        krita_instance.activeWindow().addView(doc)
 
-        # If no document is open, create one
-        if not doc:
-            doc = krita_instance.createDocument(max_width, max_height, "APE Image", "RGBA", "U8", "", 300.0)
-            krita_instance.activeWindow().addView(doc)
+        # # If no document is open, create one
+        # if not doc:
+        #     doc = krita_instance.createDocument(max_width, max_height, "APE Image", "RGBA", "U8", "", 300.0)
+        #     krita_instance.activeWindow().addView(doc)
 
         self.frames_to_layers(frames, doc)
 
