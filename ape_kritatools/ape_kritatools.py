@@ -197,7 +197,7 @@ class APEKritaTools(Extension):
         open_pal_checkbox.setChecked(True)
         open_pal_form.addWidget(open_pal_checkbox)
         # ----- Connect checkbox to function
-        # ------------------------------------- #
+        open_pal_checkbox.stateChanged.connect(lambda: self.enable_forms(open_pal_text, open_pal_button, open_pal_checkbox.checkState()))
         # ----- Connect button to function
         open_pal_button.clicked.connect(lambda: self.open_file("Open APE Palette", "APE Palette (*.pal)", open_pal_text))
         # ------------------------------------- #
@@ -259,6 +259,15 @@ class APEKritaTools(Extension):
                 
         # Show dialog
         ape_win.exec_()
+
+    def enable_forms(self, textfield, button, state):
+        """Enable or disable forms."""
+        if state == Qt.Checked:
+            textfield.setDisabled(True)
+            button.setDisabled(True)
+        else:
+            textfield.setDisabled(False)
+            button.setDisabled(False)
     
     def open_file(self, title, type_filter, text_field):
         path = QFileDialog.getOpenFileName(None, title, "", type_filter)
