@@ -1,3 +1,12 @@
+# APE.Krita Tools
+# by Eric Galvan (Goosifer.IO)
+# https://github.com/openztcc/APE.KritaTools
+# Licensed under MIT (see bottom of file)
+#
+# A Krita extension for importing Zoo Tycoon 1 graphics
+#
+# version: 0.4.0
+
 from krita import *
 import ctypes
 import os
@@ -16,8 +25,10 @@ class APEKritaTools(Extension):
     def __init__(self, parent):
         super().__init__(parent)
         self.file_path = None
+        self.embedded_pal_path = None
         self.ape_instance = None
         self.buffers = []
+        self.is_graphic_valid = False
 
     def setup(self):
         pass
@@ -138,6 +149,9 @@ class APEKritaTools(Extension):
         form_width = text_field_width + button_width + 10
         form_height = 300
 
+        # flags
+        error = False
+
         # Create pop-up dialog
         ape_win = QDialog()
         ape_win.setWindowTitle("APE Krita Tools v" + VERSION)
@@ -169,6 +183,16 @@ class APEKritaTools(Extension):
         open_sub_row.addWidget(open_button)
         # ----- Connect button to function
         open_button.clicked.connect(lambda: self.open_file("Open APE Image", "APE Image (*)", open_text))
+        if not error:
+            open_text.setText(self.file_path)
+        # ------------- Error Label
+        open_error = QLabel("Not a valid APE file.")
+        open_error.setStyleSheet("color: red")
+        open_error.setVisible(False)
+        open_form.addWidget(open_error)
+        # ------------- State check
+        open_text.textChanged.connect(lambda: self.validate_file(open_text.text(), "graphic", open_error))
+
         # ------------------------------------- #
 
         # Open Palette Form
@@ -200,6 +224,13 @@ class APEKritaTools(Extension):
         open_pal_checkbox.stateChanged.connect(lambda: self.enable_forms(open_pal_text, open_pal_button, open_pal_checkbox.checkState()))
         # ----- Connect button to function
         open_pal_button.clicked.connect(lambda: self.open_file("Open APE Palette", "APE Palette (*.pal)", open_pal_text))
+        # ------------- Error Label
+        open_pal_error = QLabel("Not a valid APE palette.")
+        open_pal_error.setStyleSheet("color: red")
+        open_pal_error.setVisible(False)
+        open_pal_form.addWidget(open_pal_error)
+        # ------------- State check
+        open_pal_text.textChanged.connect(lambda: self.validate_file(open_pal_text.text(), "palette", open_pal_error))
         # ------------------------------------- #
 
         # Settings Panel
@@ -275,6 +306,24 @@ class APEKritaTools(Extension):
             text_field.setText(path[0])
         else:
             text_field.setText("")
+
+    def validate_file(self, file_path, file_type, widget):
+        """Validate file."""
+        if not os.path.isfile(file_path):
+            widget.setVisible(True)
+            return False
+        
+        if file_type == "graphic":
+            if not lib.validate_graphic_file(file_path.encode()):
+                return False
+        elif file_type == "palette":
+            if not lib.validate_palette_file(file_path.encode()):
+                widget.setVisible(True)
+                return False
+        
+        # If file is valid
+        widget.setVisible(False)
+        return True
 
     def createActions(self, window):
         """ Register Krita menu action """

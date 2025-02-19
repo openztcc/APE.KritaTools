@@ -1,5 +1,12 @@
-__pycache__
-.gitattributes
-*.pal
-SE
-*.zip
+# Ignore all files by default
+*
+
+# Keep these specific exceptions
+!*.md
+!*.dll
+!*.py
+!*.html
+!*.desktop
+
+!LICENSE
+!*.gitignore
