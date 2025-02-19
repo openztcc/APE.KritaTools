@@ -190,8 +190,6 @@ class APEKritaTools(Extension):
         open_error.setStyleSheet("color: red")
         open_error.setVisible(False)
         open_form.addWidget(open_error)
-        # ------------- State check
-        open_text.textChanged.connect(lambda: self.validate_file(open_text.text(), "graphic", open_error))
 
         # ------------------------------------- #
 
@@ -229,8 +227,11 @@ class APEKritaTools(Extension):
         open_pal_error.setStyleSheet("color: red")
         open_pal_error.setVisible(False)
         open_pal_form.addWidget(open_pal_error)
-        # ------------- State check
+
+        # ------------- State checks
         open_pal_text.textChanged.connect(lambda: self.validate_file(open_pal_text.text(), "palette", open_pal_error))
+        open_text.textChanged.connect(lambda: self.validate_file(open_text.text(), "graphic", open_error, open_pal_text))
+
         # ------------------------------------- #
 
         # Settings Panel
@@ -307,7 +308,19 @@ class APEKritaTools(Extension):
         else:
             text_field.setText("")
 
-    def validate_file(self, file_path, file_type, widget):
+    def adjust_pal_directory(self, pal_path, graphic_path):
+        """Adjust palette directory."""
+        # Get differences between graphic and palette
+        graphic_dir = os.path.dirname(graphic_path)
+        pal_dir = os.path.dirname(pal_path)
+        graphic_base = os.path.basename(graphic_path)
+        pal_base = os.path.basename(pal_path)
+        # Adjust palette directory
+        if graphic_dir != pal_dir:
+            pal_path = os.path.join(graphic_dir, pal_base)
+        return pal_path
+
+    def validate_file(self, file_path, file_type, widget, widget2=None):
         """Validate file."""
         if not os.path.isfile(file_path):
             widget.setVisible(True)
@@ -316,15 +329,27 @@ class APEKritaTools(Extension):
         if file_type == "graphic":
             if not lib.validate_graphic_file(file_path.encode()):
                 return False
+            else:
+                if widget2:
+                    header = lib.get_header(file_path.encode())
+                    if header:
+                        pal_path = header.palName
+                        widget2.setText(self.adjust_pal_directory(pal_path, file_path))
+                        self.embedded_pal_path = pal_path.decode()
         elif file_type == "palette":
+            # see if file exists
+            if not os.path.isfile(file_path):
+                widget.setText("Cannot locate file. Uncheck 'Use Embedded Palette' to find correct file.")
+                widget.setVisible(True)
             if not lib.validate_palette_file(file_path.encode()):
+                widget.setText("Not a valid APE palette.")
                 widget.setVisible(True)
                 return False
         
         # If file is valid
         widget.setVisible(False)
         return True
-
+        
     def createActions(self, window):
         """ Register Krita menu action """
         action = window.createAction("ape_load_krita", "Load APE Image into Krita", "tools/scripts")

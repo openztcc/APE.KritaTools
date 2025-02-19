@@ -28,6 +28,15 @@ class OutputBuffer(ctypes.Structure):
         ("channels", ctypes.c_int)
     ]
 
+# Define Header struct
+class Header(ctypes.Structure):
+    _fields_ = [
+        ("speed", ctypes.c_uint32),
+        ("palNameSize", ctypes.c_uint32),
+        ("palName", ctypes.c_char_p),
+        ("frameCount", ctypes.c_uint32),
+    ]
+
 class colors(ctypes.Structure):
     _fields_ = [
         ("r", ctypes.c_uint8),
@@ -118,6 +127,12 @@ lib.get_frames.restype = ctypes.POINTER(Frame)
 # args: ape_instance, output_name, frame_index
 lib.frame_to_png.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int]
 lib.frame_to_png.restype = ctypes.c_int
+
+# Get header info
+# args: image_path
+# returns: Header struct
+lib.get_header.argtypes = [ctypes.c_char_p]
+lib.get_header.restype = Header
 
 # --------------------------- Helper Functions ---------------------------
 
