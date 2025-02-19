@@ -5,7 +5,7 @@
 #
 # A Krita extension for importing Zoo Tycoon 1 graphics
 #
-# version: 0.4.0
+# version: 0.5.0
 
 from krita import *
 import ctypes
@@ -18,7 +18,7 @@ sys.path.append(os.path.join(dir_path, "inc"))
 
 from ape_def import lib
 
-VERSION = "0.4.0"
+VERSION = "0.5.0"
 
 class APEKritaTools(Extension):
 
@@ -29,6 +29,10 @@ class APEKritaTools(Extension):
         self.ape_instance = None
         self.buffers = []
         self.is_graphic_valid = False
+        # flags
+        self.graphic_error = False
+        self.pal_error = False
+
 
     def setup(self):
         pass
@@ -147,10 +151,7 @@ class APEKritaTools(Extension):
         text_field_width = 460
         button_width = 100
         form_width = text_field_width + button_width + 10
-        form_height = 300
-
-        # flags
-        error = False
+        form_height = 350
 
         # Create pop-up dialog
         ape_win = QDialog()
@@ -183,8 +184,7 @@ class APEKritaTools(Extension):
         open_sub_row.addWidget(open_button)
         # ----- Connect button to function
         open_button.clicked.connect(lambda: self.open_file("Open APE Image", "APE Image (*)", open_text))
-        if not error:
-            open_text.setText(self.file_path)
+        open_text.setText(self.file_path)
         # ------------- Error Label
         open_error = QLabel("Not a valid APE file.")
         open_error.setStyleSheet("color: red")
@@ -229,8 +229,10 @@ class APEKritaTools(Extension):
         open_pal_form.addWidget(open_pal_error)
 
         # ------------- State checks
-        open_pal_text.textChanged.connect(lambda: self.validate_file(open_pal_text.text(), "palette", open_pal_error))
-        open_text.textChanged.connect(lambda: self.validate_file(open_text.text(), "graphic", open_error, open_pal_text))
+        open_pal_text.textChanged.connect(lambda: self.validate_file(open_pal_text.text(), "palette", open_pal_error, None, import_button))
+        open_pal_text.textChanged.connect(lambda: self.update_import_button_state(import_button))
+        open_text.textChanged.connect(lambda: self.validate_file(open_text.text(), "graphic", open_error, open_pal_text, import_button))
+        open_text.textChanged.connect(lambda: self.update_import_button_state(import_button))
 
         # ------------------------------------- #
 
@@ -273,6 +275,7 @@ class APEKritaTools(Extension):
         import_button = QPushButton("Import")
         import_button.setMinimumSize(button_width, widget_height)
         import_button.setMaximumSize(button_width, widget_height)
+        import_button.setDisabled(True)
         import_form.addWidget(import_button)
         # ----- Connect button to function
         import_button.clicked.connect(self.load_image_into_krita)
@@ -296,6 +299,8 @@ class APEKritaTools(Extension):
         """Enable or disable forms."""
         if state == Qt.Checked:
             textfield.setDisabled(True)
+            if self.embedded_pal_path:
+                textfield.setText(self.embedded_pal_path)
             button.setDisabled(True)
         else:
             textfield.setDisabled(False)
@@ -344,7 +349,7 @@ class APEKritaTools(Extension):
         
         return pal_path    
     
-    def validate_file(self, file_path, file_type, widget, widget2=None):
+    def validate_file(self, file_path, file_type, widget, widget2=None, import_button=None):
         """Validate file."""
         if not os.path.isfile(file_path):
             widget.setVisible(True)
@@ -352,8 +357,12 @@ class APEKritaTools(Extension):
         
         if file_type == "graphic":
             if not lib.validate_graphic_file(file_path.encode()):
+                self.graphic_error = True
+                widget.setVisible(True)
+                self.update_import_button_state(import_button)
                 return False
             else:
+                self.graphic_error = False
                 if widget2:
                     header = lib.get_header(file_path.encode())
                     if header:
@@ -362,12 +371,23 @@ class APEKritaTools(Extension):
                         self.embedded_pal_path = pal_path.decode()
         elif file_type == "palette":
             if not lib.validate_palette_file(file_path.encode()):
+                self.pal_error = True
                 widget.setVisible(True)
+                self.update_import_button_state(import_button)
                 return False
+            else:
+                self.pal_error = False
         
-        # If file is valid
         widget.setVisible(False)
         return True
+
+    def update_import_button_state(self, import_button):
+        """Update import button state based on both error flags."""
+        if import_button:
+            has_any_error = self.graphic_error or self.pal_error
+            import_button.setDisabled(has_any_error)
+        
+
         
     def createActions(self, window):
         """ Register Krita menu action """
@@ -377,4 +397,24 @@ class APEKritaTools(Extension):
         action.triggered.connect(self.open_dialog)
 
 
-    
+# MIT License
+
+# Copyright (c) 2025 Eric Galvan (Goosifer.IO)
+
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.    
