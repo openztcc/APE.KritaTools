@@ -223,7 +223,7 @@ class APEKritaTools(Extension):
         # ----- Connect button to function
         open_pal_button.clicked.connect(lambda: self.open_file("Open APE Palette", "APE Palette (*.pal)", open_pal_text))
         # ------------- Error Label
-        open_pal_error = QLabel("Not a valid APE palette.")
+        open_pal_error = QLabel("Not a valid APE palette. (Or palette not found)")
         open_pal_error.setStyleSheet("color: red")
         open_pal_error.setVisible(False)
         open_pal_form.addWidget(open_pal_error)
@@ -309,17 +309,41 @@ class APEKritaTools(Extension):
             text_field.setText("")
 
     def adjust_pal_directory(self, pal_path, graphic_path):
-        """Adjust palette directory."""
-        # Get differences between graphic and palette
-        graphic_dir = os.path.dirname(graphic_path)
-        pal_dir = os.path.dirname(pal_path)
-        graphic_base = os.path.basename(graphic_path)
-        pal_base = os.path.basename(pal_path)
-        # Adjust palette directory
-        if graphic_dir != pal_dir:
-            pal_path = os.path.join(graphic_dir, pal_base)
-        return pal_path
-
+        """Adjust palette path by finding common path components and appending the palette file."""
+        # Decode bytes if necessary
+        if isinstance(pal_path, bytes):
+            pal_path = pal_path.decode("utf-8")
+        if isinstance(graphic_path, bytes):
+            graphic_path = graphic_path.decode("utf-8")
+        
+        # Normalize slashes and get directory parts
+        pal_parts = pal_path.replace("\\", "/").split("/")
+        graphic_path = graphic_path.replace("\\", "/")
+        graphic_parts = graphic_path.split("/")
+        # pal_filename = pal_parts[-1]
+        
+        # Find the last matching path component
+        last_match_index = -1
+        for pal_part in pal_parts[:-1]:  # Exclude pal filename
+            for i, graphic_part in enumerate(graphic_parts):
+                if pal_part.lower() == graphic_part.lower():
+                    last_match_index = i
+        
+        if last_match_index != -1:
+            # Take the graphic path up to the last matching component
+            base_path = "/".join(graphic_parts[:last_match_index + 1])
+            # Get the pal filename
+            pal_filename = pal_parts[-1]
+            # Join them together
+            return f"{base_path}/{pal_filename}"
+        else:
+            # If no common path components, just return the pal, return graphic path
+            # without filename and append pal filename
+            new_pal_path = "/".join(graphic_parts[:-1]) + "/" + "/".join(pal_parts)
+            return new_pal_path
+        
+        return pal_path    
+    
     def validate_file(self, file_path, file_type, widget, widget2=None):
         """Validate file."""
         if not os.path.isfile(file_path):
@@ -337,12 +361,7 @@ class APEKritaTools(Extension):
                         widget2.setText(self.adjust_pal_directory(pal_path, file_path))
                         self.embedded_pal_path = pal_path.decode()
         elif file_type == "palette":
-            # see if file exists
-            if not os.path.isfile(file_path):
-                widget.setText("Cannot locate file. Uncheck 'Use Embedded Palette' to find correct file.")
-                widget.setVisible(True)
             if not lib.validate_palette_file(file_path.encode()):
-                widget.setText("Not a valid APE palette.")
                 widget.setVisible(True)
                 return False
         
