@@ -5,7 +5,7 @@
 #
 # A Krita extension for importing Zoo Tycoon 1 graphics
 #
-# version: 0.5.0
+# version: 1.0.0
 
 from krita import *
 import ctypes
@@ -18,7 +18,7 @@ sys.path.append(os.path.join(dir_path, "inc"))
 
 from ape_def import lib
 
-VERSION = "0.5.0"
+VERSION = "1.0.0"
 
 class APEKritaTools(Extension):
 
