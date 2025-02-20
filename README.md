@@ -37,8 +37,6 @@ Drop contents directly into `~/.local/share/krita/pykrita/`
 
 Open Krita and go to `Settings > Configure Krita > Python Plugin Manager` - Enable APE.KritaTools.
 
-Go to `Tools > Load APE image into Krita`. It will ask you to find the extensionless graphic first (i.e. SE, NE, N,  etc), and then again will ask you to open the pal file associated with it. There won't be a prompt for the second one, it will just open another dialog window to search for the file.
-
 ## Usage
 
 - Open Krita
