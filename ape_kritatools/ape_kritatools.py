@@ -77,7 +77,7 @@ class APEKritaTools(Extension):
         # if bg frame only, only load the last frame
         if self.load_bg_frame_only and self.has_bg_frame:
             frames = [frames[0]]
-        else:
+        elif self.load_bg_frame_only and not self.has_bg_frame:
             self.show_message("Error", "Error: No background frame found. Loading all frames.")
 
         # Add layers to document
@@ -148,9 +148,6 @@ class APEKritaTools(Extension):
         # Refresh to apply changes
         doc.refreshProjection()
 
-        # Close extension
-        self.close()
-
         # Clean up APE
         # self.ape_cleanup()
 
@@ -161,23 +158,6 @@ class APEKritaTools(Extension):
         msg.setText(text)
         msg.setIcon(QMessageBox.Information)
         msg.exec_()
-
-    def ape_cleanup(self):
-        """Cleanup APE."""
-        if self.ape_instance:
-            lib.destroy_ape_instance(self.ape_instance)
-            self.ape_instance = None
-
-        # Reset flags
-        self.graphic_error = False
-        self.pal_error = False
-        self.load_bg_frame_only = False
-        self.has_bg_frame = False
-
-        # Reset paths
-        self.file_path = None
-        self.pal_path = None
-        self.embedded_pal_path = None
 
     # ------------------------------------- Dialog --------------------------------------------- #
 
