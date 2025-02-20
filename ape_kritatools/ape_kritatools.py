@@ -25,17 +25,19 @@ class APEKritaTools(Extension):
     def __init__(self, parent):
         super().__init__(parent)
         self.file_path = None
+        self.pal_path = None
         self.embedded_pal_path = None
         self.ape_instance = None
         self.buffers = []
-        self.is_graphic_valid = False
         # flags
         self.graphic_error = False
         self.pal_error = False
-
+        self.load_bg_frame_only = False
 
     def setup(self):
         pass
+
+    # ------------------------------------- APE Functions ------------------------------------- #
 
     def load_frames(self, frame_buffer, frame_count, frames):
         """Load frames from frame buffer."""
@@ -89,18 +91,10 @@ class APEKritaTools(Extension):
             self.show_message("Error", "Error: Failed to create ApeCore instance.")
             return 0
         
-        # Load file dialog
-        ape_path = QFileDialog.getOpenFileName(None, "Open APE Image", "", "APE Image (*)")
-        pal_path = QFileDialog.getOpenFileName(None, "Open APE Palette", "", "APE Palette (*.pal)")
-
-        if not lib.load_image(self.ape_instance, ape_path[0].encode(), 1, pal_path[0].encode()):
-            self.show_message("Error", "Error: Failed to load image.")
-            return -1
-        
         # Return success
         return 1
 
-    def load_image_into_krita(self):
+    def load_image_into_krita(self, graphic_path, pal_path, load_bg_frame_only=None, import_alpha=None):
         """Load an RGBA pixel stream from pyape.dll and create a new Krita layer."""
         krita_instance = Krita.instance()
 
@@ -108,6 +102,11 @@ class APEKritaTools(Extension):
         if not self.ape_instance:
             if self.ape_init() < 1:
                 return
+
+        # Load image
+        if not lib.load_image(self.ape_instance, graphic_path.encode(), 1, pal_path.encode()):
+            self.show_message("Error", "Error: Failed to load image.")
+            return -1
         
         # Get frame count
         frame_count = lib.get_frame_count(self.ape_instance)
@@ -143,6 +142,8 @@ class APEKritaTools(Extension):
         msg.setText(text)
         msg.setIcon(QMessageBox.Information)
         msg.exec_()
+
+    # ------------------------------------- Dialog --------------------------------------------- #
 
     def open_dialog(self):
         """Open dialog."""
@@ -263,6 +264,9 @@ class APEKritaTools(Extension):
         import_alpha_checkbox.setChecked(True)
         # ----- Add border to settings panel
         settings_form.addWidget(import_alpha_checkbox)
+        # ----- Connect checkboxes to functions
+        load_bg_checkbox.stateChanged.connect(lambda: self.bg_frame_only_triggered(load_bg_checkbox.checkState()))
+        import_alpha_checkbox.stateChanged.connect(lambda: self.import_alpha_triggered(import_alpha_checkbox.checkState()))
         # ----- Spacer
         settings_form.addStretch()
 
@@ -278,7 +282,7 @@ class APEKritaTools(Extension):
         import_button.setDisabled(True)
         import_form.addWidget(import_button)
         # ----- Connect button to function
-        import_button.clicked.connect(self.load_image_into_krita)
+        import_button.clicked.connect(lambda: self.import_triggered(open_text.text(), open_pal_text.text(), load_bg_checkbox.isChecked(), import_alpha_checkbox.isChecked()))
         # ----- Cancel Button
         cancel_button = QPushButton("Cancel")
         cancel_button.setMinimumSize(button_width, widget_height)
@@ -294,6 +298,14 @@ class APEKritaTools(Extension):
                 
         # Show dialog
         ape_win.exec_()
+    
+    # ------------------------------------- Event Handlers ------------------------------------- #
+
+    def update_import_button_state(self, import_button):
+        """Update import button state based on both error flags."""
+        if import_button:
+            has_any_error = self.graphic_error or self.pal_error
+            import_button.setDisabled(has_any_error)
 
     def enable_forms(self, textfield, button, state):
         """Enable or disable forms."""
@@ -312,6 +324,40 @@ class APEKritaTools(Extension):
             text_field.setText(path[0])
         else:
             text_field.setText("")
+
+    def validate_file(self, file_path, file_type, widget, widget2=None, import_button=None):
+        """Validate file."""
+        if not os.path.isfile(file_path):
+            widget.setVisible(True)
+            return False
+        
+        if file_type == "graphic":
+            if not lib.validate_graphic_file(file_path.encode()):
+                self.graphic_error = True
+                widget.setVisible(True)
+                self.update_import_button_state(import_button)
+                return False
+            else:
+                self.graphic_error = False
+                if widget2:
+                    header = lib.get_header(file_path.encode())
+                    if header:
+                        pal_path = header.palName
+                        widget2.setText(self.adjust_pal_directory(pal_path, file_path))
+                        self.embedded_pal_path = pal_path.decode()
+        elif file_type == "palette":
+            if not lib.validate_palette_file(file_path.encode()):
+                self.pal_error = True
+                widget.setVisible(True)
+                self.update_import_button_state(import_button)
+                return False
+            else:
+                self.pal_error = False
+        
+        widget.setVisible(False)
+        return True
+
+    # ------------------------------------- Helpers --------------------------------------------- #
 
     def adjust_pal_directory(self, pal_path, graphic_path):
         """Adjust palette path by finding common path components and appending the palette file."""
@@ -349,45 +395,40 @@ class APEKritaTools(Extension):
         
         return pal_path    
     
-    def validate_file(self, file_path, file_type, widget, widget2=None, import_button=None):
-        """Validate file."""
-        if not os.path.isfile(file_path):
-            widget.setVisible(True)
-            return False
+    def import_triggered(self, graphic_path, pal_path, load_bg_frame_only, import_alpha):
+        """Import button triggered."""
+        if not graphic_path or not pal_path:
+            self.show_message("Error", "Error: Graphic or palette path is empty.")
+            return
         
-        if file_type == "graphic":
-            if not lib.validate_graphic_file(file_path.encode()):
-                self.graphic_error = True
-                widget.setVisible(True)
-                self.update_import_button_state(import_button)
-                return False
-            else:
-                self.graphic_error = False
-                if widget2:
-                    header = lib.get_header(file_path.encode())
-                    if header:
-                        pal_path = header.palName
-                        widget2.setText(self.adjust_pal_directory(pal_path, file_path))
-                        self.embedded_pal_path = pal_path.decode()
-        elif file_type == "palette":
-            if not lib.validate_palette_file(file_path.encode()):
-                self.pal_error = True
-                widget.setVisible(True)
-                self.update_import_button_state(import_button)
-                return False
-            else:
-                self.pal_error = False
+        if not os.path.isfile(graphic_path):
+            self.show_message("Error", "Error: Graphic file not found.")
+            return
         
-        widget.setVisible(False)
-        return True
+        if not os.path.isfile(pal_path):
+            self.show_message("Error", "Error: Palette file not found.")
+            return
+        
+        if self.pal_error or self.graphic_error:
+            self.show_message("Error", "Error: Invalid graphic or palette file.")
+            return
+        
+        # Load image into Krita
+        self.load_image_into_krita(graphic_path, pal_path, load_bg_frame_only, import_alpha)
 
-    def update_import_button_state(self, import_button):
-        """Update import button state based on both error flags."""
-        if import_button:
-            has_any_error = self.graphic_error or self.pal_error
-            import_button.setDisabled(has_any_error)
-        
+        # Close dialog
+        QApplication.activeWindow().close()
 
+    def bg_frame_only_triggered(self, state):
+        """Background frame only checkbox triggered."""
+        self.load_bg_frame_only = state
+
+    def import_alpha_triggered(self, state):
+        """Import with alpha checkbox triggered."""
+        self.import_alpha = state
+
+        
+    # ------------------------------------- Krita Extension ------------------------------------- #
         
     def createActions(self, window):
         """ Register Krita menu action """
