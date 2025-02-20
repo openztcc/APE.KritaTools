@@ -34,6 +34,7 @@ class APEKritaTools(Extension):
         self.pal_error = False
         self.load_bg_frame_only = False
         self.has_bg_frame = False
+        self.import_with_alpha_bg = True
 
     def setup(self):
         pass
@@ -80,18 +81,56 @@ class APEKritaTools(Extension):
         elif self.load_bg_frame_only and not self.has_bg_frame:
             self.show_message("Error", "Error: No background frame found. Loading all frames.")
 
-        # Add layers to document
+        # Remove first layer
+        if doc.rootNode().childNodes():
+            first_layer = doc.rootNode().childNodes()[0]
+            if first_layer.name() == "Background" or first_layer.pixelData(0, 0, 1, 1) == b'\x00\x00\x00\x00':
+                doc.rootNode().removeChildNode(first_layer)
+
+        # get document size
+        canvas_width = doc.width()
+        canvas_height = doc.height()
+
         for i, (width, height, channels, pixel_array) in enumerate(frames):
-            node = doc.createNode(f"Frame {i}", "paintlayer")
-            doc.rootNode().addChildNode(node, None)
+            print(f"Processing frame {i}/{len(frames)-1}")  # Debugging
 
-            # Send the raw pixel data directly to Krita
-            node.setPixelData(pixel_array, 0, 0, width, height)
-            # Refresh to apply changes
+            # Create and add the frame layer
+            frame_node = doc.createNode(f"Frame {i}", "paintlayer")
+            
+            if not self.import_with_alpha_bg:
+                # create background layer
+                bg_node = doc.createNode(f"Background {i}", "paintlayer")
+
+                # add background layer above frame
+                doc.rootNode().addChildNode(bg_node, None)
+
+                # fill background with magenta to doc size
+                bg_color = bytearray([255, 0, 255, 255] * canvas_width * canvas_height)
+                bg_node.setPixelData(bg_color, 0, 0, canvas_width, canvas_height)
+
+                # add frame to background
+                doc.rootNode().addChildNode(frame_node, bg_node)
+
+            else:
+                doc.rootNode().addChildNode(frame_node, None)
+
+            # Set frame size
+            frame_node.setPixelData(pixel_array, 0, 0, width, height)
+
+            if not self.import_with_alpha_bg:
+                # make frame the active node
+                doc.setActiveNode(frame_node)
+
+                # Merge down the frame to the background
+                frame_node.mergeDown()
+
+                # make background the active node
+                doc.setActiveNode(bg_node)
+
+            # Refresh document
             doc.refreshProjection()
-            # Set the new layer as the active node
+        self.import_with_alpha_bg = True
 
-            doc.setActiveNode(node)
 
     def ape_init(self): 
         """Initialize APE."""
@@ -276,7 +315,7 @@ class APEKritaTools(Extension):
         load_bg_checkbox.setChecked(False)
         settings_form.addWidget(load_bg_checkbox)
         # ----- Import with alpha checkbox
-        import_alpha_checkbox = QCheckBox("Import with alpha")
+        import_alpha_checkbox = QCheckBox("Import with alpha background")
         import_alpha_checkbox.setChecked(True)
         # ----- Add border to settings panel
         settings_form.addWidget(import_alpha_checkbox)
@@ -441,7 +480,7 @@ class APEKritaTools(Extension):
 
     def import_alpha_triggered(self, state):
         """Import with alpha checkbox triggered."""
-        self.import_alpha = state
+        self.import_with_alpha_bg = state
 
         
     # ------------------------------------- Krita Extension ------------------------------------- #
