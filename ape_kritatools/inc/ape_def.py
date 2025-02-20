@@ -12,9 +12,18 @@ import ctypes
 
 # Get current path
 current_path = os.path.dirname(os.path.abspath(__file__))
-dll_path = os.path.join(current_path, "ApeCore.dll")
+
+# if windows, load the DLL
+if os.name == "nt":
+    dll_path = os.path.join(current_path, "ApeCore.dll")
+elif os.name == "posix":
+    dll_path = os.path.join(current_path, "ApeCore.so")
+else:
+    raise OSError("Unsupported operating system.")
 
 # Load the DLL
+if not os.path.exists(dll_path):
+    raise OSError("Could not find ApeCore.dll or ApeCore.so.")
 lib = ctypes.CDLL(dll_path)
 
 # --------------------------- Define the structures ---------------------------
