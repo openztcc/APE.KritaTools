@@ -33,6 +33,7 @@ class APEKritaTools(Extension):
         self.graphic_error = False
         self.pal_error = False
         self.load_bg_frame_only = False
+        self.has_bg_frame = False
 
     def setup(self):
         pass
@@ -70,6 +71,15 @@ class APEKritaTools(Extension):
 
     def frames_to_layers(self, frames, doc):
         """Convert frames to layers."""
+        # reverse frames
+        frames.reverse()
+
+        # if bg frame only, only load the last frame
+        if self.load_bg_frame_only and self.has_bg_frame:
+            frames = [frames[0]]
+        else:
+            self.show_message("Error", "Error: No background frame found. Loading all frames.")
+
         # Add layers to document
         for i, (width, height, channels, pixel_array) in enumerate(frames):
             node = doc.createNode(f"Frame {i}", "paintlayer")
@@ -108,6 +118,9 @@ class APEKritaTools(Extension):
             self.show_message("Error", "Error: Failed to load image.")
             return -1
         
+        # Does the image have a background frame?
+        self.has_bg_frame = lib.has_background_frame(graphic_path.encode())
+        
         # Get frame count
         frame_count = lib.get_frame_count(self.ape_instance)
 
@@ -135,6 +148,12 @@ class APEKritaTools(Extension):
         # Refresh to apply changes
         doc.refreshProjection()
 
+        # Close extension
+        self.close()
+
+        # Clean up APE
+        # self.ape_cleanup()
+
     def show_message(self, title, text):
         """ Show a pop-up message box. """
         msg = QMessageBox()
@@ -142,6 +161,23 @@ class APEKritaTools(Extension):
         msg.setText(text)
         msg.setIcon(QMessageBox.Information)
         msg.exec_()
+
+    def ape_cleanup(self):
+        """Cleanup APE."""
+        if self.ape_instance:
+            lib.destroy_ape_instance(self.ape_instance)
+            self.ape_instance = None
+
+        # Reset flags
+        self.graphic_error = False
+        self.pal_error = False
+        self.load_bg_frame_only = False
+        self.has_bg_frame = False
+
+        # Reset paths
+        self.file_path = None
+        self.pal_path = None
+        self.embedded_pal_path = None
 
     # ------------------------------------- Dialog --------------------------------------------- #
 
@@ -304,7 +340,7 @@ class APEKritaTools(Extension):
     def update_import_button_state(self, import_button):
         """Update import button state based on both error flags."""
         if import_button:
-            has_any_error = self.graphic_error or self.pal_error
+            has_any_error = self.graphic_error # or self.pal_error
             import_button.setDisabled(has_any_error)
 
     def enable_forms(self, textfield, button, state):
