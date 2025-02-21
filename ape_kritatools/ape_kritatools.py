@@ -5,7 +5,7 @@
 #
 # A Krita extension for importing Zoo Tycoon 1 graphics
 #
-# version: 1.1.0
+# version: 1.1.1
 
 from krita import *
 import ctypes
@@ -18,7 +18,7 @@ sys.path.append(os.path.join(dir_path, "inc"))
 
 from pyape import ape
 
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 
 class APEKritaTools(Extension):
 
@@ -98,7 +98,8 @@ class APEKritaTools(Extension):
         # # reverse frames
         frames.reverse()
 
-        frames.insert(0, bg_frame)
+        if self.has_bg_frame:
+            frames.insert(0, bg_frame)
 
 
         # if bg frame only, only load the last frame
