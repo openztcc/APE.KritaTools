@@ -5,7 +5,7 @@
 #
 # A Krita extension for importing Zoo Tycoon 1 graphics
 #
-# version: 1.0.0
+# version: 1.1.0
 
 from krita import *
 import ctypes
@@ -16,9 +16,9 @@ import sys
 dir_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(dir_path, "inc"))
 
-from ape_def import lib
+from pyape import ape
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 class APEKritaTools(Extension):
 
@@ -35,6 +35,7 @@ class APEKritaTools(Extension):
         self.load_bg_frame_only = False
         self.has_bg_frame = False
         self.import_with_alpha_bg = True
+        self.bounding_box = {"w": 0, "h": 0}
 
     def setup(self):
         pass
@@ -47,6 +48,8 @@ class APEKritaTools(Extension):
             frame = frame_buffer[i].contents
             width = frame.width
             height = frame.height
+            offsetX = frame.offsetX
+            offsetY = frame.offsetY
             channels = frame.channels
             pixel_stream = frame.pixels
 
@@ -68,12 +71,35 @@ class APEKritaTools(Extension):
                 for p in range(0, num_pixels, 4):
                     pixel_array[p], pixel_array[p + 2] = pixel_array[p + 2], pixel_array[p]
 
-            frames.append((width, height, channels, pixel_array))
+            frames.append((width, height, offsetX, offsetY, channels, pixel_array))
+        
+        # Find the true pivot (smallest x and y)
+        pivot_x = min(frame[2] for frame in frames)  # Smallest offsetX
+        pivot_y = min(frame[3] for frame in frames)  # Smallest offsetY
+
+        # Adjust bounding box
+        bounding_box_width = max(frame[0] + (frame[2] - pivot_x) for frame in frames)
+        bounding_box_height = max(frame[1] + (frame[3] - pivot_y) for frame in frames)
+
+        # Update bounding box
+        self.bounding_box["w"] = bounding_box_width
+        self.bounding_box["h"] = bounding_box_height
+
+
 
     def frames_to_layers(self, frames, doc):
         """Convert frames to layers."""
-        # reverse frames
+
+        # if bg frame, move it to the front
+        if self.has_bg_frame:
+            # bg frame is last frame
+            bg_frame = frames[-1]
+            frames = frames[:-1]
+        # # reverse frames
         frames.reverse()
+
+        frames.insert(0, bg_frame)
+
 
         # if bg frame only, only load the last frame
         if self.load_bg_frame_only and self.has_bg_frame:
@@ -91,7 +117,13 @@ class APEKritaTools(Extension):
         canvas_width = doc.width()
         canvas_height = doc.height()
 
-        for i, (width, height, channels, pixel_array) in enumerate(frames):
+        origin_frameX = None
+        origin_frameY = None
+
+        anchorX = None
+        anchorY = None
+
+        for i, (width, height, offsetX, offsetY, channels, pixel_array) in enumerate(frames):
             print(f"Processing frame {i}/{len(frames)-1}")  # Debugging
 
             # Create and add the frame layer
@@ -106,8 +138,7 @@ class APEKritaTools(Extension):
 
                 # fill background with magenta to doc size
                 bg_color = bytearray([255, 0, 255, 255] * canvas_width * canvas_height)
-                bg_node.setPixelData(bg_color, 0, 0, canvas_width, canvas_height)
-
+                bg_node.setPixelData(bg_color, 0, 0, canvas_width, canvas_height) 
                 # add frame to background
                 doc.rootNode().addChildNode(frame_node, bg_node)
 
@@ -116,6 +147,24 @@ class APEKritaTools(Extension):
 
             # Set frame size
             frame_node.setPixelData(pixel_array, 0, 0, width, height)
+            
+            # if bg frame or first frame, center it
+            if i == 0:
+                # Center first frame
+                anchorX = (canvas_width // 2) - (width // 2)
+                anchorY = (canvas_height // 2) - (height // 2)
+                
+                first_offsetX = offsetX + anchorX
+                first_offsetY = offsetY + anchorY
+
+                # Move first frame directly
+                frame_node.move(anchorX, anchorY)
+            else:
+                # Reset origin frame
+                frame_node.move(anchorX, anchorY)
+
+                # Apply relative offset
+                frame_node.move(-(offsetX - first_offsetX), -(offsetY - first_offsetY))
 
             if not self.import_with_alpha_bg:
                 # make frame the active node
@@ -129,13 +178,45 @@ class APEKritaTools(Extension):
 
             # Refresh document
             doc.refreshProjection()
+        
+        # Initialize bounding box extremes
+        min_x = float('inf')
+        min_y = float('inf')
+        max_x = float('-inf')
+        max_y = float('-inf')
+
+        # Iterate over all layers to find the extreme positions
+        for layer in doc.rootNode().childNodes():
+            bounds = layer.bounds()
+            x, y = bounds.x(), bounds.y()
+            width, height = bounds.width(), bounds.height()
+
+            min_x = min(min_x, x)
+            min_y = min(min_y, y)
+            max_x = max(max_x, x + width)
+            max_y = max(max_y, y + height)
+
+        # Compute the new bounding box size
+        new_width = max_x - min_x
+        new_height = max_y - min_y
+
+        # Update bounding box
+        self.bounding_box["w"] = int(new_width)
+        self.bounding_box["h"] = int(new_height)
+
+        # Update offsets to center
+        offsetX = (canvas_width // 2) - (new_width // 2)
+        offsetY = (canvas_height // 2) - (new_height // 2)
+
+        doc.resizeImage(offsetX, offsetY, self.bounding_box["w"], self.bounding_box["h"])
+
         self.import_with_alpha_bg = True
 
 
     def ape_init(self): 
         """Initialize APE."""
         # Load image from DLL
-        self.ape_instance = lib.create_ape_instance()
+        self.ape_instance = ape.create_ape_instance()
         if not self.ape_instance:
             self.show_message("Error", "Error: Failed to create ApeCore instance.")
             return 0
@@ -153,28 +234,28 @@ class APEKritaTools(Extension):
                 return
 
         # Load image
-        if not lib.load_image(self.ape_instance, graphic_path.encode(), 1, pal_path.encode()):
+        if not ape.load_image(self.ape_instance, graphic_path.encode(), 1, pal_path.encode()):
             self.show_message("Error", "Error: Failed to load image.")
             return -1
         
         # Does the image have a background frame?
-        self.has_bg_frame = lib.has_background_frame(graphic_path.encode())
+        self.has_bg_frame = ape.has_background_frame(graphic_path.encode())
         
         # Get frame count
-        frame_count = lib.get_frame_count(self.ape_instance)
+        frame_count = ape.get_frame_count(self.ape_instance)
 
         # Get frame data
-        frame_buffer = lib.get_frame_buffer(self.ape_instance)
+        frame_buffer = ape.get_frame_buffer(self.ape_instance)
         frames = []
 
         # Load frames
         self.load_frames(frame_buffer, frame_count, frames)
 
         # Find the largest size
-        max_width = max(frame[0] for frame in frames)
-        max_height = max(frame[1] for frame in frames)
+        # max_width = max(frame[0] for frame in frames)
+        # max_height = max(frame[1] for frame in frames)
         
-        doc = krita_instance.createDocument(max_width, max_height, "Untitled", "RGBA", "U8", "", 300.0)
+        doc = krita_instance.createDocument(self.bounding_box["w"], self.bounding_box["h"], "Untitled", "RGBA", "U8", "", 300.0)
         krita_instance.activeWindow().addView(doc)
 
         # # If no document is open, create one
@@ -387,7 +468,7 @@ class APEKritaTools(Extension):
             return False
         
         if file_type == "graphic":
-            if not lib.validate_graphic_file(file_path.encode()):
+            if not ape.validate_graphic_file(file_path.encode()):
                 self.graphic_error = True
                 widget.setVisible(True)
                 self.update_import_button_state(import_button)
@@ -395,13 +476,13 @@ class APEKritaTools(Extension):
             else:
                 self.graphic_error = False
                 if widget2:
-                    header = lib.get_header(file_path.encode())
+                    header = ape.get_header(file_path.encode())
                     if header:
                         pal_path = header.palName
                         widget2.setText(self.adjust_pal_directory(pal_path, file_path))
                         self.embedded_pal_path = pal_path.decode()
         elif file_type == "palette":
-            if not lib.validate_palette_file(file_path.encode()):
+            if not ape.validate_palette_file(file_path.encode()):
                 self.pal_error = True
                 widget.setVisible(True)
                 self.update_import_button_state(import_button)
