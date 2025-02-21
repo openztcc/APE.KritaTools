@@ -46,7 +46,7 @@ Open Krita and go to `Settings > Configure Krita > Python Plugin Manager` - Enab
 - Accept default palette or uncheck "Use Embedded Palette" to select a new one.
 - Import
 
-## Known issues as of v1.1.0
+## Known issues as of v1.1.1
 
 - No save function yet
 
