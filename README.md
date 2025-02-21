@@ -50,6 +50,10 @@ Open Krita and go to `Settings > Configure Krita > Python Plugin Manager` - Enab
 
 - No save function yet
 
+## Support
+
+Join our Discord for support: [OpenZT Discord](https://discord.gg/ATqFYVsjkc)
+
 ## Credits
 
 - Much of the basis of this project could not be done without Jeff Bostoen's detailed specification of the ZT1 graphics format here: https://github.com/jbostoen/ZTStudio/wiki/ZT1-Graphics-Explained
