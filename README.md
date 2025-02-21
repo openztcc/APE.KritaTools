@@ -46,9 +46,12 @@ Open Krita and go to `Settings > Configure Krita > Python Plugin Manager` - Enab
 - Accept default palette or uncheck "Use Embedded Palette" to select a new one.
 - Import
 
-## Known issues as of v1.0.0
+## Known issues as of v1.1.0
 
 - No save function yet
-- Possible offset misalignment on frames
 
-Much thanks to Jeff Bostoen's detailed specification of the ZT1 graphics format here: https://github.com/jbostoen/ZTStudio/wiki/ZT1-Graphics-Explained
+## Credits
+
+- Much of the basis of this project could not be done without Jeff Bostoen's detailed specification of the ZT1 graphics format here: https://github.com/jbostoen/ZTStudio/wiki/ZT1-Graphics-Explained
+- A lot of of structure names are inspired by Mad Scientist's original Zoot documentation on the file format which was also used as reference.
+- Big thanks to Jay for answering my questions about the ZT1 format! Helped me solve a lot of headaches with frame alignments.
