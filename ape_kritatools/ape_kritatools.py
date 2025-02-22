@@ -90,17 +90,15 @@ class APEKritaTools(Extension):
     def frames_to_layers(self, frames, doc):
         """Convert frames to layers."""
 
+        # reverse frames to load in correct order
+        frames.reverse()
+
         # if bg frame, move it to the front
         if self.has_bg_frame:
             # bg frame is last frame
-            bg_frame = frames[-1]
-            frames = frames[:-1]
-        # # reverse frames
-        frames.reverse()
-
-        if self.has_bg_frame:
+            bg_frame = frames[0]
+            frames = frames[1:]
             frames.insert(0, bg_frame)
-
 
         # if bg frame only, only load the last frame
         if self.load_bg_frame_only and self.has_bg_frame:
@@ -117,9 +115,6 @@ class APEKritaTools(Extension):
         # get document size
         canvas_width = doc.width()
         canvas_height = doc.height()
-
-        origin_frameX = None
-        origin_frameY = None
 
         anchorX = None
         anchorY = None
@@ -163,7 +158,6 @@ class APEKritaTools(Extension):
             else:
                 # Reset origin frame
                 frame_node.move(anchorX, anchorY)
-
                 # Apply relative offset
                 frame_node.move(-(offsetX - first_offsetX), -(offsetY - first_offsetY))
 
@@ -179,7 +173,39 @@ class APEKritaTools(Extension):
 
             # Refresh document
             doc.refreshProjection()
-        
+        # Initialize bounding box
+        self.update_bounds(doc, canvas_width, canvas_height)
+        self.import_with_alpha_bg = True
+
+    def move_layers_to_timeline(self, doc):
+        """Move layers to timeline."""
+        layers = doc.rootNode().childNodes()
+
+        # # Keep background layer
+        # if self.has_bg_frame:
+        #     bg_layer = layers[0]
+        #     bg_layer.setName("Background")
+        #     layers = layers[1:]
+
+        # Create group layer from all layers
+        group_layer = doc.createGroupLayer("Animation")
+        doc.rootNode().addChildNode(group_layer, None)
+
+        for layer in layers:
+            doc.rootNode().removeChildNode(layer)
+            group_layer.addChildNode(layer, None)
+
+        # Create an animation layer
+        animation = doc.createLayer("Animation", "paintlayer")
+        animation.enableAnimation()
+        doc.rootNode().addChildNode(animation, None)
+
+        # # Convert group layer to animation layer
+        # group_layer.setIsAnimationLayer(True)
+            
+
+
+    def update_bounds(self, doc, canvas_width=1024, canvas_height=1024):
         # Initialize bounding box extremes
         min_x = float('inf')
         min_y = float('inf')
@@ -210,9 +236,6 @@ class APEKritaTools(Extension):
         offsetY = (canvas_height // 2) - (new_height // 2)
 
         doc.resizeImage(offsetX, offsetY, self.bounding_box["w"], self.bounding_box["h"])
-
-        self.import_with_alpha_bg = True
-
 
     def ape_init(self): 
         """Initialize APE."""
