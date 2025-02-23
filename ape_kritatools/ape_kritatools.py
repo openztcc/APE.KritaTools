@@ -599,7 +599,7 @@ class APEKritaTools(Extension):
             ms = header.speed
         fps = 1000 / ms # original speed is ms per frame
         doc.setFramesPerSecond(fps)
-        doc.setFullClipRangeEndTime(self.frame_count)
+        doc.setFullClipRangeEndTime(self.frame_count - 1)
 
         # Hit play
         Krita.instance().action("toggle_playback").trigger()
