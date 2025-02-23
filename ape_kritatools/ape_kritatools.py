@@ -17,6 +17,7 @@ dir_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(dir_path, "inc"))
 
 from pyape import ape
+# from ape_ui import ApeUi as ui
 
 VERSION = "1.1.1"
 
@@ -29,6 +30,7 @@ class APEKritaTools(Extension):
         self.embedded_pal_path = None
         self.ape_instance = None
         self.buffers = []
+        self.frame_count = 0
         # flags
         self.graphic_error = False
         self.pal_error = False
@@ -36,6 +38,8 @@ class APEKritaTools(Extension):
         self.has_bg_frame = False
         self.import_with_alpha_bg = True
         self.bounding_box = {"w": 0, "h": 0}
+        self.krita = None
+        self.import_as_animation = True
 
     def setup(self):
         pass
@@ -85,22 +89,23 @@ class APEKritaTools(Extension):
         self.bounding_box["w"] = bounding_box_width
         self.bounding_box["h"] = bounding_box_height
 
+        # update frame count
+        self.frame_count = frame_count
+
 
 
     def frames_to_layers(self, frames, doc):
         """Convert frames to layers."""
 
+        # reverse frames to load in correct order
+        frames.reverse()
+
         # if bg frame, move it to the front
         if self.has_bg_frame:
             # bg frame is last frame
-            bg_frame = frames[-1]
-            frames = frames[:-1]
-        # # reverse frames
-        frames.reverse()
-
-        if self.has_bg_frame:
+            bg_frame = frames[0]
+            frames = frames[1:]
             frames.insert(0, bg_frame)
-
 
         # if bg frame only, only load the last frame
         if self.load_bg_frame_only and self.has_bg_frame:
@@ -108,18 +113,19 @@ class APEKritaTools(Extension):
         elif self.load_bg_frame_only and not self.has_bg_frame:
             self.show_message("Error", "Error: No background frame found. Loading all frames.")
 
-        # Remove first layer
+        # Remove default layer
         if doc.rootNode().childNodes():
             first_layer = doc.rootNode().childNodes()[0]
             if first_layer.name() == "Background" or first_layer.pixelData(0, 0, 1, 1) == b'\x00\x00\x00\x00':
                 doc.rootNode().removeChildNode(first_layer)
 
+        # create group for animations
+        group_layer = doc.createGroupLayer("Animation")
+        # doc.rootNode().addChildNode(group_layer, None)
+
         # get document size
         canvas_width = doc.width()
         canvas_height = doc.height()
-
-        origin_frameX = None
-        origin_frameY = None
 
         anchorX = None
         anchorY = None
@@ -144,7 +150,11 @@ class APEKritaTools(Extension):
                 doc.rootNode().addChildNode(frame_node, bg_node)
 
             else:
-                doc.rootNode().addChildNode(frame_node, None)
+                if i == 0:
+                    doc.rootNode().addChildNode(frame_node, None)
+                    doc.rootNode().addChildNode(group_layer, None)
+                else:
+                    group_layer.addChildNode(frame_node, None)
 
             # Set frame size
             frame_node.setPixelData(pixel_array, 0, 0, width, height)
@@ -163,7 +173,6 @@ class APEKritaTools(Extension):
             else:
                 # Reset origin frame
                 frame_node.move(anchorX, anchorY)
-
                 # Apply relative offset
                 frame_node.move(-(offsetX - first_offsetX), -(offsetY - first_offsetY))
 
@@ -179,7 +188,13 @@ class APEKritaTools(Extension):
 
             # Refresh document
             doc.refreshProjection()
-        
+
+        # Initialize bounding box
+        self.update_bounds(doc, canvas_width, canvas_height)
+        self.import_with_alpha_bg = True
+        doc.refreshProjection()
+
+    def update_bounds(self, doc, canvas_width=1024, canvas_height=1024):
         # Initialize bounding box extremes
         min_x = float('inf')
         min_y = float('inf')
@@ -211,9 +226,6 @@ class APEKritaTools(Extension):
 
         doc.resizeImage(offsetX, offsetY, self.bounding_box["w"], self.bounding_box["h"])
 
-        self.import_with_alpha_bg = True
-
-
     def ape_init(self): 
         """Initialize APE."""
         # Load image from DLL
@@ -227,7 +239,7 @@ class APEKritaTools(Extension):
 
     def load_image_into_krita(self, graphic_path, pal_path, load_bg_frame_only=None, import_alpha=None):
         """Load an RGBA pixel stream from pyape.dll and create a new Krita layer."""
-        krita_instance = Krita.instance()
+        self.krita = Krita.instance()
 
         # Initialize APE
         if not self.ape_instance:
@@ -256,8 +268,8 @@ class APEKritaTools(Extension):
         # max_width = max(frame[0] for frame in frames)
         # max_height = max(frame[1] for frame in frames)
         
-        doc = krita_instance.createDocument(self.bounding_box["w"], self.bounding_box["h"], "Untitled", "RGBA", "U8", "", 300.0)
-        krita_instance.activeWindow().addView(doc)
+        doc = self.krita.createDocument(self.bounding_box["w"], self.bounding_box["h"], "Untitled", "RGBA", "U8", "", 300.0)
+        self.krita.activeWindow().addView(doc)
 
         # # If no document is open, create one
         # if not doc:
@@ -265,6 +277,8 @@ class APEKritaTools(Extension):
         #     krita_instance.activeWindow().addView(doc)
 
         self.frames_to_layers(frames, doc)
+        app = Krita.instance()
+        doc = app.activeDocument()
 
         # Refresh to apply changes
         doc.refreshProjection()
@@ -281,7 +295,6 @@ class APEKritaTools(Extension):
         msg.exec_()
 
     # ------------------------------------- Dialog --------------------------------------------- #
-
     def open_dialog(self):
         """Open dialog."""
         # static variables
@@ -399,11 +412,16 @@ class APEKritaTools(Extension):
         # ----- Import with alpha checkbox
         import_alpha_checkbox = QCheckBox("Import with alpha background")
         import_alpha_checkbox.setChecked(True)
+        # ----- Import as animation checkbox
+        import_as_animation_checkbox = QCheckBox("Import as animation")
+        import_as_animation_checkbox.setChecked(True)
+        settings_form.addWidget(import_as_animation_checkbox)
         # ----- Add border to settings panel
         settings_form.addWidget(import_alpha_checkbox)
         # ----- Connect checkboxes to functions
         load_bg_checkbox.stateChanged.connect(lambda: self.bg_frame_only_triggered(load_bg_checkbox.checkState()))
         import_alpha_checkbox.stateChanged.connect(lambda: self.import_alpha_triggered(import_alpha_checkbox.checkState()))
+        import_as_animation_checkbox.stateChanged.connect(lambda: self.import_as_animation_triggered(import_as_animation_checkbox.checkState()))
         # ----- Spacer
         settings_form.addStretch()
 
@@ -552,9 +570,13 @@ class APEKritaTools(Extension):
         
         # Load image into Krita
         self.load_image_into_krita(graphic_path, pal_path, load_bg_frame_only, import_alpha)
+        
 
         # Close dialog
         QApplication.activeWindow().close()
+        args = {"frame_count": self.frame_count, "graphic_path": graphic_path, "import_as_animation": self.import_as_animation, "has_bg_frame": self.has_bg_frame}
+        QTimer.singleShot(500, lambda: self.runAfterExit(args))
+
 
     def bg_frame_only_triggered(self, state):
         """Background frame only checkbox triggered."""
@@ -564,6 +586,35 @@ class APEKritaTools(Extension):
         """Import with alpha checkbox triggered."""
         self.import_with_alpha_bg = state
 
+    def import_as_animation_triggered(self, state):
+        """Import as animation checkbox triggered."""
+        self.import_as_animation = state
+
+    def runAfterExit(self, args):
+        """Convert group layer to timeline."""
+        doc = Krita.instance().activeDocument()
+
+        if args["has_bg_frame"]:
+            # move bg frame to the back
+            bg_frame = doc.nodeByName("Frame 0")
+            # Rename bg frame
+            bg_frame.setName("Background")
+
+        if args["import_as_animation"]:
+            group_layer = doc.nodeByName("Animation")
+            doc.setActiveNode(group_layer)
+            Krita.instance().action("convert_group_to_animated").trigger()
+
+            # Update fps
+            header = ape.get_header(args["graphic_path"].encode())
+            if header:
+                ms = header.speed
+            fps = 1000 / ms # original speed is ms per frame
+            doc.setFramesPerSecond(fps)
+            doc.setFullClipRangeEndTime(args["frame_count"] - 1)
+
+            # Hit play
+            Krita.instance().action("toggle_playback").trigger()
         
     # ------------------------------------- Krita Extension ------------------------------------- #
         
@@ -573,7 +624,6 @@ class APEKritaTools(Extension):
         # action.triggered.connect(self.load_image_into_krita)
         # Open dialog
         action.triggered.connect(self.open_dialog)
-
 
 # MIT License
 
