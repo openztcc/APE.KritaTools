@@ -30,6 +30,7 @@ class APEKritaTools(Extension):
         self.embedded_pal_path = None
         self.ape_instance = None
         self.buffers = []
+        self.frame_count = 0
         # flags
         self.graphic_error = False
         self.pal_error = False
@@ -86,6 +87,9 @@ class APEKritaTools(Extension):
         # Update bounding box
         self.bounding_box["w"] = bounding_box_width
         self.bounding_box["h"] = bounding_box_height
+
+        # update frame count
+        self.frame_count = frame_count
 
 
 
@@ -563,7 +567,7 @@ class APEKritaTools(Extension):
 
         # Close dialog
         QApplication.activeWindow().close()
-        QTimer.singleShot(500, lambda: self.runAfterExit())
+        QTimer.singleShot(500, lambda: self.runAfterExit(self.frame_count, graphic_path))
 
 
     def bg_frame_only_triggered(self, state):
@@ -574,7 +578,7 @@ class APEKritaTools(Extension):
         """Import with alpha checkbox triggered."""
         self.import_with_alpha_bg = state
 
-    def runAfterExit(self):
+    def runAfterExit(self, frames, file_path):
         """Convert group layer to timeline."""
         doc = Krita.instance().activeDocument()
 
@@ -590,11 +594,15 @@ class APEKritaTools(Extension):
         Krita.instance().action("move_layer_up").trigger()
 
         # Update fps
-        header = ape.get_header(self.file_path.encode())
+        header = ape.get_header(file_path.encode())
         if header:
             ms = header.speed
-        fps = (len(frames) * 1000) // ms
-        doc.setFps(fps)
+        fps = 1000 / ms # original speed is ms per frame
+        doc.setFramesPerSecond(fps)
+        doc.setFullClipRangeEndTime(self.frame_count)
+
+        # Hit play
+        Krita.instance().action("toggle_playback").trigger()
 
         
     # ------------------------------------- Krita Extension ------------------------------------- #
