@@ -39,6 +39,7 @@ class APEKritaTools(Extension):
         self.import_with_alpha_bg = True
         self.bounding_box = {"w": 0, "h": 0}
         self.krita = None
+        self.import_as_animation = True
 
     def setup(self):
         pass
@@ -120,7 +121,7 @@ class APEKritaTools(Extension):
 
         # create group for animations
         group_layer = doc.createGroupLayer("Animation")
-        doc.rootNode().addChildNode(group_layer, None)
+        # doc.rootNode().addChildNode(group_layer, None)
 
         # get document size
         canvas_width = doc.width()
@@ -151,6 +152,7 @@ class APEKritaTools(Extension):
             else:
                 if i == 0:
                     doc.rootNode().addChildNode(frame_node, None)
+                    doc.rootNode().addChildNode(group_layer, None)
                 else:
                     group_layer.addChildNode(frame_node, None)
 
@@ -410,11 +412,16 @@ class APEKritaTools(Extension):
         # ----- Import with alpha checkbox
         import_alpha_checkbox = QCheckBox("Import with alpha background")
         import_alpha_checkbox.setChecked(True)
+        # ----- Import as animation checkbox
+        import_as_animation_checkbox = QCheckBox("Import as animation")
+        import_as_animation_checkbox.setChecked(True)
+        settings_form.addWidget(import_as_animation_checkbox)
         # ----- Add border to settings panel
         settings_form.addWidget(import_alpha_checkbox)
         # ----- Connect checkboxes to functions
         load_bg_checkbox.stateChanged.connect(lambda: self.bg_frame_only_triggered(load_bg_checkbox.checkState()))
         import_alpha_checkbox.stateChanged.connect(lambda: self.import_alpha_triggered(import_alpha_checkbox.checkState()))
+        import_as_animation_checkbox.stateChanged.connect(lambda: self.import_as_animation_triggered(import_as_animation_checkbox.checkState()))
         # ----- Spacer
         settings_form.addStretch()
 
@@ -567,7 +574,8 @@ class APEKritaTools(Extension):
 
         # Close dialog
         QApplication.activeWindow().close()
-        QTimer.singleShot(500, lambda: self.runAfterExit(self.frame_count, graphic_path))
+        args = {"frame_count": self.frame_count, "graphic_path": graphic_path, "import_as_animation": self.import_as_animation, "has_bg_frame": self.has_bg_frame}
+        QTimer.singleShot(500, lambda: self.runAfterExit(args))
 
 
     def bg_frame_only_triggered(self, state):
@@ -578,32 +586,35 @@ class APEKritaTools(Extension):
         """Import with alpha checkbox triggered."""
         self.import_with_alpha_bg = state
 
-    def runAfterExit(self, frames, file_path):
+    def import_as_animation_triggered(self, state):
+        """Import as animation checkbox triggered."""
+        self.import_as_animation = state
+
+    def runAfterExit(self, args):
         """Convert group layer to timeline."""
         doc = Krita.instance().activeDocument()
 
-        if self.has_bg_frame:
+        if args["has_bg_frame"]:
             # move bg frame to the back
             bg_frame = doc.nodeByName("Frame 0")
             # Rename bg frame
             bg_frame.setName("Background")
 
-        group_layer = doc.nodeByName("Animation")
-        doc.setActiveNode(group_layer)
-        Krita.instance().action("convert_group_to_animated").trigger()
-        Krita.instance().action("move_layer_up").trigger()
+        if args["import_as_animation"]:
+            group_layer = doc.nodeByName("Animation")
+            doc.setActiveNode(group_layer)
+            Krita.instance().action("convert_group_to_animated").trigger()
 
-        # Update fps
-        header = ape.get_header(file_path.encode())
-        if header:
-            ms = header.speed
-        fps = 1000 / ms # original speed is ms per frame
-        doc.setFramesPerSecond(fps)
-        doc.setFullClipRangeEndTime(self.frame_count - 1)
+            # Update fps
+            header = ape.get_header(args["graphic_path"].encode())
+            if header:
+                ms = header.speed
+            fps = 1000 / ms # original speed is ms per frame
+            doc.setFramesPerSecond(fps)
+            doc.setFullClipRangeEndTime(args["frame_count"] - 1)
 
-        # Hit play
-        Krita.instance().action("toggle_playback").trigger()
-
+            # Hit play
+            Krita.instance().action("toggle_playback").trigger()
         
     # ------------------------------------- Krita Extension ------------------------------------- #
         
